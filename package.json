@@ -11,6 +11,8 @@
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
+    "@inquirer/prompts": "^8.4.3",
+    "@inquirer/search": "^4.1.9",
     "csv-parse": "^6.2.1",
     "dotenv": "^17.4.2"
   },

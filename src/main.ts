@@ -5,6 +5,8 @@ import { loadPresentes, loadUsuarios, loadFaltas, prompt } from "./utils/dataPar
 import { fetchReposForUsers } from "./services/gitService";
 import { scaffoldFolder, isRepoCloned } from "./services/fileManager";
 import { Alumno, Presente, Usuario } from "./types";
+import { select } from "@inquirer/prompts";
+import search  from "@inquirer/search"; // Importamos el buscador dinámico
 
 async function main() {
   if (config.DRY_RUN) console.log("\n🔍 MODO DRY-RUN — no se escribirá nada en disco\n");
@@ -66,64 +68,111 @@ async function main() {
 
   if (!matcheados.length) return;
 
-  console.log("\n📋 Alumnos a procesar:");
-  matcheados.forEach((a) =>
-    console.log(`  - ${a.nombre} (DNI: ${a.dni}) → @${a.usuario["Usuario Github Registrado"]}`),
-  );
-
   const usernames = matcheados.map((a) => a.usuario["Usuario Github Registrado"]);
   const repoMap = await fetchReposForUsers(usernames);
 
-  matcheados.forEach((a) => {
-    const username = a.usuario["Usuario Github Registrado"].toLowerCase();
-    const found = repoMap.has(username);
-    console.log(`  ${found ? "✅" : "❌"} ${config.PARCIAL_PREFIX}-${a.usuario["Usuario Github Registrado"]}`);
-  });
-
-  const modoClonado = await prompt(`\n¿Modo de clonado? (1: Automático todo junto, 2: Preguntar uno por uno) [1/2]: `);
-  const pasoAPaso = modoClonado.trim() === "2";
-
-  const confirmar = await prompt(`\n¿Empezar el proceso para ${repoMap.size} repos encontrados? (s/N): `);
-  if (confirmar.toLowerCase() !== "s") {
-    console.log("Abortado.");
-    return;
-  }
-
   if (!config.DRY_RUN) fs.mkdirSync(config.OUTPUT_DIR, { recursive: true });
 
-  console.log("\n📁 Armando carpetas y procesando...\n");
+  // === BUCLE PRINCIPAL DEL MENÚ ===
+  let enMenu = true;
 
-  const total = matcheados.length;
-  for (let i = 0; i < total; i++) {
-    const alumno = matcheados[i];
-    const porcentaje = Math.round(((i + 1) / total) * 100);
-    const cloneUrl = repoMap.get(alumno.usuario["Usuario Github Registrado"].toLowerCase());
+  while (enMenu) {
+    const modoClonado = await select({
+      message: '\n¿Qué acción deseás realizar?',
+      choices: [
+        {
+          name: '🤖 Automático (Clonar todos los pendientes de corrido)',
+          value: 'auto',
+          description: 'Clonará todos los repos que aún no estén en el disco.'
+        },
+        {
+          name: '👆 Paso a paso (Preguntar antes de cada uno)',
+          value: 'paso_a_paso',
+          description: 'Irá alumno por alumno pidiendo confirmación.'
+        },
+        {
+          name: '🔎 Buscar y clonar un repo en particular',
+          value: 'individual',
+          description: 'Abrirá un buscador dinámico para encontrar a un alumno rápido.'
+        },
+        {
+          name: '❌ Salir',
+          value: 'salir',
+        }
+      ]
+    });
 
-    // Validamos si ya existe para saltearlo (así es "resumible")
-    if (!config.DRY_RUN && isRepoCloned(alumno)) {
-      console.log(`👤 [${i + 1}/${total}] (${porcentaje}%) ⏭️  Saltando (Ya clonado): ${alumno.nombre}`);
-      continue;
+    if (modoClonado === 'salir') {
+      enMenu = false;
+      break;
     }
 
-    if (pasoAPaso) {
-      const resp = await prompt(`\n👤 [${i + 1}/${total}] (${porcentaje}%) ¿Clonar entrega de ${alumno.nombre}? (s/N): `);
-      if (resp.toLowerCase() !== "s") {
-        console.log("🛑 Proceso detenido por el usuario. Podés volver a correr el script para retomar desde acá.");
-        break; // Cortamos el bucle si decide no seguir
-      }
+    const total = matcheados.length;
+
+    if (modoClonado === 'individual') {
+      // === BUSCADOR DINÁMICO ===
+      const alumnoElegido = await search({
+        message: 'Escribí el DNI, Nombre o GitHub para buscar (flechas para elegir, Enter para confirmar):',
+        source: async (input) => {
+          // Generamos las opciones en tiempo real para que el ✅ se actualice
+          const opciones = matcheados.map((alumno) => {
+            const clonado = !config.DRY_RUN && isRepoCloned(alumno);
+            return {
+              name: `${clonado ? '✅' : '⬜'} ${alumno.nombre} (${alumno.dni}) [@${alumno.usuario["Usuario Github Registrado"]}]`,
+              value: alumno,
+            };
+          });
+
+          // Si no hay texto, mostramos todos
+          if (!input) return opciones;
+
+          // Filtramos ignorando mayúsculas y minúsculas
+          const termino = input.toLowerCase();
+          return opciones.filter((op) => op.name.toLowerCase().includes(termino));
+        },
+      });
+
+      console.log(`\nProcesando a ${alumnoElegido.nombre}...`);
+      const cloneUrl = repoMap.get(alumnoElegido.usuario["Usuario Github Registrado"].toLowerCase());
+      scaffoldFolder(alumnoElegido, cloneUrl);
+      console.log(`🎉 ¡Listo! Volviendo al menú principal...`);
+
     } else {
-      console.log(`👤 [${i + 1}/${total}] (${porcentaje}%) Procesando ${alumno.nombre}...`);
-    }
+      // Modos Automático y Paso a paso
+      const pasoAPaso = modoClonado === "paso_a_paso";
+      let cancelado = false;
 
-    scaffoldFolder(alumno, cloneUrl);
+      for (let i = 0; i < total; i++) {
+        const alumno = matcheados[i];
+        const porcentaje = Math.round(((i + 1) / total) * 100);
+        const cloneUrl = repoMap.get(alumno.usuario["Usuario Github Registrado"].toLowerCase());
+
+        if (!config.DRY_RUN && isRepoCloned(alumno)) {
+          console.log(`👤 [${i + 1}/${total}] (${porcentaje}%) ⏭️  Saltando (Ya clonado): ${alumno.nombre}`);
+          continue;
+        }
+
+        if (pasoAPaso) {
+          const resp = await prompt(`\n👤 [${i + 1}/${total}] (${porcentaje}%) ¿Clonar entrega de ${alumno.nombre}? (s/N): `);
+          if (resp.toLowerCase() !== "s") {
+            console.log("🛑 Proceso detenido por el usuario.");
+            cancelado = true;
+            break; 
+          }
+        } else {
+          console.log(`👤 [${i + 1}/${total}] (${porcentaje}%) Procesando ${alumno.nombre}...`);
+        }
+
+        scaffoldFolder(alumno, cloneUrl);
+      }
+
+      if (!cancelado) {
+        console.log(`\n✅ Proceso por lotes finalizado. Encontrarás todo en: ${config.OUTPUT_DIR}`);
+      }
+    }
   }
 
-  const clonados = matcheados.filter((a) =>
-    repoMap.has(a.usuario["Usuario Github Registrado"].toLowerCase()),
-  ).length;
-
-  console.log(`\n${"=".repeat(60)}`);
-  console.log(`✅ Proceso finalizado. Encontrarás todo en: ${config.OUTPUT_DIR}\n`);
+  console.log(`\n👋 ¡Hasta luego! Script finalizado.\n`);
 }
 
 main().catch((e) => {
