@@ -12,42 +12,41 @@ Comisión: {{comision}}
 
 ---
 
-## Estado general
+## Observaciones generales
 
-- [ ] Entrega incompleta
-- [ ] No compila
-- [ ] Falta parte del parcial
+### Objeto y mensaje
 
----
-
-## Observaciones
+- 
 
 ### Polimorfismo
--
 
-### Colecciones
--
+- 
 
-### Legibilidad
--
+### Colecciones y bloques
 
-### Estructura
--
+- 
 
 ### Tests
+
+- 
+
+### Prolijidad y legibilidad
+
+- 
+
+### Estructura
+
+- 
+
+---
+
+## Detalle 
+
 -
 
 ---
 
-## Comentarios generales
-
--
-
----
-
-## Nota
-
-Nota:
+## Nota: 
 
 ---
 
