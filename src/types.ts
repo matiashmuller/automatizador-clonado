@@ -1,6 +1,6 @@
 export type Alumno = Presente & { usuario: Usuario };
 export type Falta = { dni: string; estado: string };
-export type EstadoCorreccion = "PENDIENTE" | "EN_CORRECCION" | "ARCHIVADO";
+export type EstadoCorreccion = "PENDIENTE" | "EN_CORRECCION" | "CORREGIDO" | "ARCHIVADO";
 
 export type Presente = {
   dni: string;

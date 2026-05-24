@@ -11,7 +11,7 @@ import {
 import { fetchReposForUsers } from "./services/gitService";
 import { scaffoldFolder, isRepoCloned, getPaths } from "./services/fileManager";
 import { Alumno, Presente, Usuario } from "./types";
-import { select, checkbox } from "@inquirer/prompts";
+import { select, checkbox, confirm } from "@inquirer/prompts";
 import search from "@inquirer/search";
 import { getAlumnoState, updateAlumnoState } from "./services/stateManager";
 
@@ -111,10 +111,10 @@ async function main() {
             "Abrirá un buscador dinámico para encontrar a un alumno rápido.",
         },
         {
-          name: "🧹 Archivar múltiples repositorios y limpiar disco",
-          value: "archivar_multi",
+          name: "✅ Marcar / Desmarcar corregidos",
+          value: "gestionar_corregidos",
           description:
-            "Seleccionar múltiples alumnos ya corregidos para hacerles backup y borrar sus repos.",
+            "Cambiar el estado de las entregas y decidir si archivarlas.",
         },
         {
           name: "❌ Salir",
@@ -131,67 +131,113 @@ async function main() {
     const total = matcheados.length;
 
     // ==========================================
-    // NUEVA LÓGICA: ARCHIVAR MÚLTIPLES REPOS
+    // LÓGICA: MARCAR / DESMARCAR Y ARCHIVAR
     // ==========================================
-    if (modoClonado === "archivar_multi") {
-      const enCorreccion = matcheados.filter(
-        (a) => getAlumnoState(a.dni) === "EN_CORRECCION",
+    if (modoClonado === "gestionar_corregidos") {
+      const activos = matcheados.filter(
+        (a) =>
+          getAlumnoState(a.dni) === "EN_CORRECCION" ||
+          getAlumnoState(a.dni) === "CORREGIDO",
       );
 
-      if (enCorreccion.length === 0) {
-        console.log(
-          "\nℹ️ No hay repositorios en estado de corrección para archivar.",
-        );
+      if (activos.length === 0) {
+        console.log("\nℹ️ No hay repositorios en corrección para gestionar.");
         continue;
       }
 
-      const opcionesCheckbox = enCorreccion.map((alumno) => ({
-        name: `${alumno.nombre} (${alumno.dni})`,
-        value: alumno,
-      }));
+      // Armamos la lista y PRE-MARCAMOS los que ya estaban corregidos
+      const opcionesCheckbox = activos.map((alumno) => {
+        const estadoActual = getAlumnoState(alumno.dni);
+        const yaCorregido = estadoActual === "CORREGIDO";
+        return {
+          name: `${yaCorregido ? "✅ (Corregido)" : "📂 (En proceso)"} ${alumno.nombre} (${alumno.dni})`,
+          value: alumno,
+          checked: yaCorregido, // La magia de Inquirer: pre-marca la casilla
+        };
+      });
 
-      const alumnosAArchivar = await checkbox({
+      const alumnosSeleccionados = await checkbox({
         message:
-          "Seleccioná los alumnos que ya corregiste (Espacio para marcar, Enter para confirmar):",
+          "Marcá con Espacio los corregidos y desmarcá para revertir (Enter para confirmar):",
         choices: opcionesCheckbox,
       });
 
-      if (alumnosAArchivar.length === 0) {
-        console.log("\nNo seleccionaste a nadie. Volviendo al menú...");
+      // Detectamos cuáles quedaron DESMARCADOS en comparación a la lista total
+      const desmarcados = activos.filter(
+        (a) => !alumnosSeleccionados.find((sel) => sel.dni === a.dni),
+      );
+
+      // 1. Revertimos los desmarcados a EN_CORRECCION
+      let revertidos = 0;
+      for (const alumno of desmarcados) {
+        if (getAlumnoState(alumno.dni) === "CORREGIDO") {
+          updateAlumnoState(alumno, "EN_CORRECCION");
+          revertidos++;
+        }
+      }
+      if (revertidos > 0) {
+        console.log(
+          `\n⏪ Se revirtieron ${revertidos} entregas al estado "En proceso".`,
+        );
+      }
+
+      // Si no quedó nadie seleccionado, volvemos al menú
+      if (alumnosSeleccionados.length === 0) {
+        console.log(
+          "\nNingún alumno quedó marcado como corregido. Volviendo al menú...",
+        );
         continue;
       }
 
-      console.log(`\nArchivando ${alumnosAArchivar.length} repositorios...`);
-      const historialDir = path.join(process.cwd(), "historial_correcciones");
-      if (!fs.existsSync(historialDir))
-        fs.mkdirSync(historialDir, { recursive: true });
+      // 2. Preguntamos qué hacer con los que SÍ quedaron seleccionados
+      const archivar = await confirm({
+        message: `Tenés ${alumnosSeleccionados.length} entregas marcadas como corregidas. ¿Querés archivarlas AHORA?\n  (⚠️ Esto guardará los feedback.md y BORRARÁ las carpetas del disco)`,
+      });
 
-      for (const alumno of alumnosAArchivar) {
-        const { folderPath, comisionFolder } = getPaths(alumno);
-
-        const feedbackOrigen = path.join(folderPath, "feedback.md");
-        const comisionHistorialDir = path.join(historialDir, comisionFolder);
-        if (!fs.existsSync(comisionHistorialDir))
-          fs.mkdirSync(comisionHistorialDir, { recursive: true });
-
-        const feedbackDestino = path.join(
-          comisionHistorialDir,
-          `${alumno.dni}_${alumno.nombre}_feedback.md`,
+      if (archivar) {
+        console.log(
+          `\nArchivando y limpiando ${alumnosSeleccionados.length} repositorios...`,
         );
+        const historialDir = path.join(process.cwd(), "historial_correcciones");
+        if (!fs.existsSync(historialDir))
+          fs.mkdirSync(historialDir, { recursive: true });
 
-        if (fs.existsSync(feedbackOrigen)) {
-          fs.copyFileSync(feedbackOrigen, feedbackDestino);
+        for (const alumno of alumnosSeleccionados) {
+          const { folderPath, comisionFolder } = getPaths(alumno);
+
+          const feedbackOrigen = path.join(folderPath, "feedback.md");
+          const comisionHistorialDir = path.join(historialDir, comisionFolder);
+          if (!fs.existsSync(comisionHistorialDir))
+            fs.mkdirSync(comisionHistorialDir, { recursive: true });
+
+          const feedbackDestino = path.join(
+            comisionHistorialDir,
+            `${alumno.dni}_${alumno.nombre}_feedback.md`,
+          );
+
+          if (fs.existsSync(feedbackOrigen)) {
+            fs.copyFileSync(feedbackOrigen, feedbackDestino);
+          }
+
+          if (fs.existsSync(folderPath)) {
+            fs.rmSync(folderPath, { recursive: true, force: true });
+          }
+
+          updateAlumnoState(alumno, "ARCHIVADO");
+          console.log(`✅ Archivado y borrado: ${alumno.nombre}`);
         }
 
-        if (fs.existsSync(folderPath)) {
-          fs.rmSync(folderPath, { recursive: true, force: true });
+        console.log("\n🧹 ¡Limpieza completa! Espacio en disco recuperado.");
+      } else {
+        // Solo los actualizamos a CORREGIDO
+        for (const alumno of alumnosSeleccionados) {
+          updateAlumnoState(alumno, "CORREGIDO");
         }
-
-        updateAlumnoState(alumno, "ARCHIVADO");
-        console.log(`✅ Consultado y borrado: ${alumno.nombre}`);
+        console.log(
+          `\n✅ ${alumnosSeleccionados.length} entregas marcadas como "Corregidas". Los repositorios siguen en tu disco.`,
+        );
       }
 
-      console.log("\n🧹 ¡Limpieza completa! Espacio en disco recuperado.");
       continue;
     }
 
