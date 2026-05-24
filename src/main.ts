@@ -1,15 +1,23 @@
 import "dotenv/config";
 import * as fs from "fs";
+import * as path from "path";
 import { config } from "./config";
-import { loadPresentes, loadUsuarios, loadFaltas, prompt } from "./utils/dataParser";
+import {
+  loadPresentes,
+  loadUsuarios,
+  loadFaltas,
+  prompt,
+} from "./utils/dataParser";
 import { fetchReposForUsers } from "./services/gitService";
-import { scaffoldFolder, isRepoCloned } from "./services/fileManager";
+import { scaffoldFolder, isRepoCloned, getPaths } from "./services/fileManager";
 import { Alumno, Presente, Usuario } from "./types";
-import { select } from "@inquirer/prompts";
-import search  from "@inquirer/search"; // Importamos el buscador dinámico
+import { select, checkbox } from "@inquirer/prompts";
+import search from "@inquirer/search";
+import { getAlumnoState, updateAlumnoState } from "./services/stateManager";
 
 async function main() {
-  if (config.DRY_RUN) console.log("\n🔍 MODO DRY-RUN — no se escribirá nada en disco\n");
+  if (config.DRY_RUN)
+    console.log("\n🔍 MODO DRY-RUN — no se escribirá nada en disco\n");
 
   const presentes = loadPresentes() as Presente[];
   const usuarios = loadUsuarios() as Usuario[];
@@ -33,7 +41,9 @@ async function main() {
     usuariosFiltrados = usuarios.filter((u) => comisiones.includes(u.Comision));
   }
 
-  const usuariosMap = new Map(usuariosFiltrados.map((u) => [u["DNI"].trim(), u]));
+  const usuariosMap = new Map(
+    usuariosFiltrados.map((u) => [u["DNI"].trim(), u]),
+  );
   const presentesConfirmados = presentes.filter((p) => p.presente === "true");
 
   const matcheados: Alumno[] = [];
@@ -48,7 +58,9 @@ async function main() {
 
     const falta = faltas.get(p.dni.trim());
     if (falta?.estado === "LIBRE") {
-      console.log(`\n  🚨 LIBRE: ${p.nombre} (DNI: ${p.dni}) está en condición LIBRE`);
+      console.log(
+        `\n  🚨 LIBRE: ${p.nombre} (DNI: ${p.dni}) está en condición LIBRE`,
+      );
       const resp = await prompt("    ¿Incluir de todas formas? (s/N): ");
       if (resp.toLowerCase() !== "s") continue;
     }
@@ -68,7 +80,9 @@ async function main() {
 
   if (!matcheados.length) return;
 
-  const usernames = matcheados.map((a) => a.usuario["Usuario Github Registrado"]);
+  const usernames = matcheados.map(
+    (a) => a.usuario["Usuario Github Registrado"],
+  );
   const repoMap = await fetchReposForUsers(usernames);
 
   if (!config.DRY_RUN) fs.mkdirSync(config.OUTPUT_DIR, { recursive: true });
@@ -78,96 +92,190 @@ async function main() {
 
   while (enMenu) {
     const modoClonado = await select({
-      message: '\n¿Qué acción deseás realizar?',
+      message: "\n¿Qué acción deseás realizar?",
       choices: [
         {
-          name: '🤖 Automático (Clonar todos los pendientes de corrido)',
-          value: 'auto',
-          description: 'Clonará todos los repos que aún no estén en el disco.'
+          name: "🤖 Automático (Clonar todos los pendientes de corrido)",
+          value: "auto",
+          description: "Clonará todos los repos que aún no estén en el disco.",
         },
         {
-          name: '👆 Paso a paso (Preguntar antes de cada uno)',
-          value: 'paso_a_paso',
-          description: 'Irá alumno por alumno pidiendo confirmación.'
+          name: "👆 Paso a paso (Preguntar antes de cada uno)",
+          value: "paso_a_paso",
+          description: "Irá alumno por alumno pidiendo confirmación.",
         },
         {
-          name: '🔎 Buscar y clonar un repo en particular',
-          value: 'individual',
-          description: 'Abrirá un buscador dinámico para encontrar a un alumno rápido.'
+          name: "🔎 Buscar y clonar un repo en particular",
+          value: "individual",
+          description:
+            "Abrirá un buscador dinámico para encontrar a un alumno rápido.",
         },
         {
-          name: '❌ Salir',
-          value: 'salir',
-        }
-      ]
+          name: "🧹 Archivar múltiples repositorios y limpiar disco",
+          value: "archivar_multi",
+          description:
+            "Seleccionar múltiples alumnos ya corregidos para hacerles backup y borrar sus repos.",
+        },
+        {
+          name: "❌ Salir",
+          value: "salir",
+        },
+      ],
     });
 
-    if (modoClonado === 'salir') {
+    if (modoClonado === "salir") {
       enMenu = false;
       break;
     }
 
     const total = matcheados.length;
 
-    if (modoClonado === 'individual') {
-      // === BUSCADOR DINÁMICO ===
+    // ==========================================
+    // NUEVA LÓGICA: ARCHIVAR MÚLTIPLES REPOS
+    // ==========================================
+    if (modoClonado === "archivar_multi") {
+      const enCorreccion = matcheados.filter(
+        (a) => getAlumnoState(a.dni) === "EN_CORRECCION",
+      );
+
+      if (enCorreccion.length === 0) {
+        console.log(
+          "\nℹ️ No hay repositorios en estado de corrección para archivar.",
+        );
+        continue;
+      }
+
+      const opcionesCheckbox = enCorreccion.map((alumno) => ({
+        name: `${alumno.nombre} (${alumno.dni})`,
+        value: alumno,
+      }));
+
+      const alumnosAArchivar = await checkbox({
+        message:
+          "Seleccioná los alumnos que ya corregiste (Espacio para marcar, Enter para confirmar):",
+        choices: opcionesCheckbox,
+      });
+
+      if (alumnosAArchivar.length === 0) {
+        console.log("\nNo seleccionaste a nadie. Volviendo al menú...");
+        continue;
+      }
+
+      console.log(`\nArchivando ${alumnosAArchivar.length} repositorios...`);
+      const historialDir = path.join(process.cwd(), "historial_correcciones");
+      if (!fs.existsSync(historialDir))
+        fs.mkdirSync(historialDir, { recursive: true });
+
+      for (const alumno of alumnosAArchivar) {
+        const { folderPath, comisionFolder } = getPaths(alumno);
+
+        const feedbackOrigen = path.join(folderPath, "feedback.md");
+        const comisionHistorialDir = path.join(historialDir, comisionFolder);
+        if (!fs.existsSync(comisionHistorialDir))
+          fs.mkdirSync(comisionHistorialDir, { recursive: true });
+
+        const feedbackDestino = path.join(
+          comisionHistorialDir,
+          `${alumno.dni}_${alumno.nombre}_feedback.md`,
+        );
+
+        if (fs.existsSync(feedbackOrigen)) {
+          fs.copyFileSync(feedbackOrigen, feedbackDestino);
+        }
+
+        if (fs.existsSync(folderPath)) {
+          fs.rmSync(folderPath, { recursive: true, force: true });
+        }
+
+        updateAlumnoState(alumno, "ARCHIVADO");
+        console.log(`✅ Consultado y borrado: ${alumno.nombre}`);
+      }
+
+      console.log("\n🧹 ¡Limpieza completa! Espacio en disco recuperado.");
+      continue;
+    }
+
+    // ==========================================
+    // LÓGICA DE CLONADO
+    // ==========================================
+    if (modoClonado === "individual") {
       const alumnoElegido = await search({
-        message: 'Escribí el DNI, Nombre o GitHub para buscar (flechas para elegir, Enter para confirmar):',
+        message:
+          "Escribí el DNI, Nombre o GitHub para buscar (flechas para elegir, Enter para confirmar):",
         source: async (input) => {
-          // Generamos las opciones en tiempo real para que el ✅ se actualice
           const opciones = matcheados.map((alumno) => {
-            const clonado = !config.DRY_RUN && isRepoCloned(alumno);
+            const estado = getAlumnoState(alumno.dni);
+            let icono = "⬜";
+            if (estado === "EN_CORRECCION") icono = "📂";
+            if (estado === "ARCHIVADO") icono = "✅";
+
             return {
-              name: `${clonado ? '✅' : '⬜'} ${alumno.nombre} (${alumno.dni}) [@${alumno.usuario["Usuario Github Registrado"]}]`,
+              name: `${icono} ${alumno.nombre} (${alumno.dni}) [@${alumno.usuario["Usuario Github Registrado"]}]`,
               value: alumno,
             };
           });
 
-          // Si no hay texto, mostramos todos
           if (!input) return opciones;
-
-          // Filtramos ignorando mayúsculas y minúsculas
           const termino = input.toLowerCase();
-          return opciones.filter((op) => op.name.toLowerCase().includes(termino));
+          return opciones.filter((op) =>
+            op.name.toLowerCase().includes(termino),
+          );
         },
       });
 
       console.log(`\nProcesando a ${alumnoElegido.nombre}...`);
-      const cloneUrl = repoMap.get(alumnoElegido.usuario["Usuario Github Registrado"].toLowerCase());
+      const cloneUrl = repoMap.get(
+        alumnoElegido.usuario["Usuario Github Registrado"].toLowerCase(),
+      );
       scaffoldFolder(alumnoElegido, cloneUrl);
+      updateAlumnoState(alumnoElegido, "EN_CORRECCION");
       console.log(`🎉 ¡Listo! Volviendo al menú principal...`);
-
     } else {
-      // Modos Automático y Paso a paso
       const pasoAPaso = modoClonado === "paso_a_paso";
       let cancelado = false;
+
+      console.log("\n📁 Procesando carpetas...\n");
 
       for (let i = 0; i < total; i++) {
         const alumno = matcheados[i];
         const porcentaje = Math.round(((i + 1) / total) * 100);
-        const cloneUrl = repoMap.get(alumno.usuario["Usuario Github Registrado"].toLowerCase());
+        const cloneUrl = repoMap.get(
+          alumno.usuario["Usuario Github Registrado"].toLowerCase(),
+        );
+        const estado = getAlumnoState(alumno.dni);
 
-        if (!config.DRY_RUN && isRepoCloned(alumno)) {
-          console.log(`👤 [${i + 1}/${total}] (${porcentaje}%) ⏭️  Saltando (Ya clonado): ${alumno.nombre}`);
+        if (!config.DRY_RUN && estado !== "PENDIENTE") {
+          const motivo =
+            estado === "ARCHIVADO" ? "Ya corregido" : "En corrección";
+          console.log(
+            `👤 [${i + 1}/${total}] (${porcentaje}%) ⏭️  Saltando (${motivo}): ${alumno.nombre}`,
+          );
           continue;
         }
 
         if (pasoAPaso) {
-          const resp = await prompt(`\n👤 [${i + 1}/${total}] (${porcentaje}%) ¿Clonar entrega de ${alumno.nombre}? (s/N): `);
+          const resp = await prompt(
+            `\n👤 [${i + 1}/${total}] (${porcentaje}%) ¿Clonar entrega de ${alumno.nombre}? (s/N): `,
+          );
           if (resp.toLowerCase() !== "s") {
             console.log("🛑 Proceso detenido por el usuario.");
             cancelado = true;
-            break; 
+            break;
           }
         } else {
-          console.log(`👤 [${i + 1}/${total}] (${porcentaje}%) Procesando ${alumno.nombre}...`);
+          console.log(
+            `👤 [${i + 1}/${total}] (${porcentaje}%) Procesando ${alumno.nombre}...`,
+          );
         }
 
         scaffoldFolder(alumno, cloneUrl);
+        updateAlumnoState(alumno, "EN_CORRECCION");
       }
 
       if (!cancelado) {
-        console.log(`\n✅ Proceso por lotes finalizado. Encontrarás todo en: ${config.OUTPUT_DIR}`);
+        console.log(
+          `\n✅ Proceso por lotes finalizado. Encontrarás todo en: ${config.OUTPUT_DIR}`,
+        );
       }
     }
   }

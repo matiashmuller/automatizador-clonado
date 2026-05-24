@@ -1,3 +1,7 @@
+export type Alumno = Presente & { usuario: Usuario };
+export type Falta = { dni: string; estado: string };
+export type EstadoCorreccion = "PENDIENTE" | "EN_CORRECCION" | "ARCHIVADO";
+
 export type Presente = {
   dni: string;
   nombre: string;
@@ -10,5 +14,11 @@ export type Usuario = {
   Comision: string;
 };
 
-export type Alumno = Presente & { usuario: Usuario };
-export type Falta = { dni: string; estado: string };
+export type RegistroCorreccion = {
+  dni: string;
+  nombre: string;
+  github: string;
+  estado: EstadoCorreccion;
+  fechaClonado?: string;
+  fechaArchivado?: string;
+};
