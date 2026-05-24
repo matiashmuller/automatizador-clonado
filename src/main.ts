@@ -1,11 +1,9 @@
 import "dotenv/config";
 import * as fs from "fs";
-import { config } from "./config"; // Importamos el objeto centralizado
-import { 
-  loadPresentes, loadUsuarios, loadFaltas, prompt 
-} from "./utils/dataParser";
+import { config } from "./config";
+import { loadPresentes, loadUsuarios, loadFaltas, prompt } from "./utils/dataParser";
 import { fetchReposForUsers } from "./services/gitService";
-import { scaffoldFolder } from "./services/fileManager";
+import { scaffoldFolder, isRepoCloned } from "./services/fileManager";
 import { Alumno, Presente, Usuario } from "./types";
 
 async function main() {
@@ -82,26 +80,41 @@ async function main() {
     console.log(`  ${found ? "✅" : "❌"} ${config.PARCIAL_PREFIX}-${a.usuario["Usuario Github Registrado"]}`);
   });
 
-  const confirmar = await prompt(`\n¿Proceder a clonar ${repoMap.size} repos encontrados? (s/N): `);
+  const modoClonado = await prompt(`\n¿Modo de clonado? (1: Automático todo junto, 2: Preguntar uno por uno) [1/2]: `);
+  const pasoAPaso = modoClonado.trim() === "2";
+
+  const confirmar = await prompt(`\n¿Empezar el proceso para ${repoMap.size} repos encontrados? (s/N): `);
   if (confirmar.toLowerCase() !== "s") {
     console.log("Abortado.");
     return;
   }
 
-  console.log(`✅ Repos encontrados: ${repoMap.size} / ${matcheados.length}`);
-
   if (!config.DRY_RUN) fs.mkdirSync(config.OUTPUT_DIR, { recursive: true });
 
-  console.log("\n📁 Armando carpetas y clonando...\n");
+  console.log("\n📁 Armando carpetas y procesando...\n");
 
   const total = matcheados.length;
   for (let i = 0; i < total; i++) {
     const alumno = matcheados[i];
     const porcentaje = Math.round(((i + 1) / total) * 100);
-
-    console.log(`👤 [${i + 1}/${total}] (${porcentaje}%) ${alumno.nombre}`);
     const cloneUrl = repoMap.get(alumno.usuario["Usuario Github Registrado"].toLowerCase());
-    
+
+    // Validamos si ya existe para saltearlo (así es "resumible")
+    if (!config.DRY_RUN && isRepoCloned(alumno)) {
+      console.log(`👤 [${i + 1}/${total}] (${porcentaje}%) ⏭️  Saltando (Ya clonado): ${alumno.nombre}`);
+      continue;
+    }
+
+    if (pasoAPaso) {
+      const resp = await prompt(`\n👤 [${i + 1}/${total}] (${porcentaje}%) ¿Clonar entrega de ${alumno.nombre}? (s/N): `);
+      if (resp.toLowerCase() !== "s") {
+        console.log("🛑 Proceso detenido por el usuario. Podés volver a correr el script para retomar desde acá.");
+        break; // Cortamos el bucle si decide no seguir
+      }
+    } else {
+      console.log(`👤 [${i + 1}/${total}] (${porcentaje}%) Procesando ${alumno.nombre}...`);
+    }
+
     scaffoldFolder(alumno, cloneUrl);
   }
 
@@ -110,12 +123,7 @@ async function main() {
   ).length;
 
   console.log(`\n${"=".repeat(60)}`);
-  console.log(`✅ Carpetas creadas: ${matcheados.length}`);
-  console.log(`📦 Repos clonados:  ${clonados}`);
-  console.log(`⚠️  Sin repo:        ${matcheados.length - clonados}`);
-  console.log(`❓ Sin GitHub:      ${sinMatch.length}`);
-  console.log("=".repeat(60));
-  console.log(`\nEncontrarás todo en: ${config.OUTPUT_DIR}\n`);
+  console.log(`✅ Proceso finalizado. Encontrarás todo en: ${config.OUTPUT_DIR}\n`);
 }
 
 main().catch((e) => {
