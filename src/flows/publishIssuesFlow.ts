@@ -23,32 +23,24 @@ export async function publishIssuesFlow(
     if (getAlumnoState(a.dni) !== "ARCHIVADO") {
       return false;
     }
-
     const { comisionFolder } = getPaths(a);
-
     const feedbackPath = path.join(
       process.cwd(),
       "historial_correcciones",
       comisionFolder,
       `${a.dni}_${a.nombre}_feedback.md`,
     );
-
     return fs.existsSync(feedbackPath);
   });
 
   if (archivados.length === 0) {
     console.log("\nℹ️  No hay entregas archivadas para publicar.\n");
-
-    await input({
-      message: "Presioná Enter para volver...",
-    });
-
+    await input({ message: "Presioná Enter para volver..." });
     return;
   }
 
   const seleccionados = await checkbox({
     message: "Seleccioná las devoluciones a publicar como issue:",
-
     choices: archivados.map((alumno) => ({
       name: `📦 ${alumno.nombre} (@${alumno.usuario["Usuario Github Registrado"]})`,
       value: alumno,
@@ -57,11 +49,7 @@ export async function publishIssuesFlow(
 
   if (seleccionados.length === 0) {
     console.log("\nℹ️  No seleccionaste ninguna devolución.\n");
-
-    await input({
-      message: "Presioná Enter para volver...",
-    });
-
+    await input({ message: "Presioná Enter para volver..." });
     return;
   }
 
@@ -71,7 +59,6 @@ export async function publishIssuesFlow(
 
   if (!confirmar) {
     console.log("\n❌ Operación cancelada.\n");
-
     return;
   }
 
@@ -81,39 +68,34 @@ export async function publishIssuesFlow(
   let fallidos = 0;
 
   for (const alumno of seleccionados) {
-    const githubUser =
-      alumno.usuario["Usuario Github Registrado"].toLowerCase();
-
+    const githubUser = alumno.usuario["Usuario Github Registrado"].toLowerCase();
     const repoData = repoMap.get(githubUser);
 
     if (!repoData) {
       console.log(`❌ Repo no encontrado para ${alumno.nombre}`);
-
       fallidos++;
-
       continue;
     }
 
     const { comisionFolder } = getPaths(alumno);
-
     const feedbackPath = path.join(
       process.cwd(),
       "historial_correcciones",
       comisionFolder,
-      `${alumno.dni}_${alumno.nombre}_feedback.md`,
+      `${alumno.dni}_${alumno.nombre}_feedback.md`, // Nota: asegúrate que 'a' esté definido o usa 'alumno'
     );
 
     if (!fs.existsSync(feedbackPath)) {
       console.log(`❌ feedback.md inexistente para ${alumno.nombre}`);
-
       fallidos++;
-
       continue;
     }
 
     const feedbackMd = fs.readFileSync(feedbackPath, "utf-8");
-
     const feedbackContent = `@${githubUser}\n\n${feedbackMd.trim()}`;
+
+    // --- AQUÍ EL CAMBIO ---
+    console.log(`⏳ Publicando issue para ${alumno.nombre}...`);
 
     const issue = await createIssue(
       repoData,
@@ -123,15 +105,15 @@ export async function publishIssuesFlow(
 
     if (!issue) {
       console.log(`❌ Error publicando issue para ${alumno.nombre}`);
-
       fallidos++;
-
       continue;
     }
 
     updateAlumnoState(alumno, "PUBLICADO");
-
-    console.log(`✅ Issue publicado para ${alumno.nombre}: ${issue.html_url}`);
+    
+    // Log con la URL que devolvió la API
+    console.log(`✅ Issue publicado: ${issue.html_url}`);
+    // -----------------------
 
     publicados++;
   }
@@ -141,7 +123,5 @@ export async function publishIssuesFlow(
   console.log(`❌ Fallidos: ${fallidos}`);
   console.log(`${"=".repeat(60)}\n`);
 
-  await input({
-    message: "Presioná Enter para volver...",
-  });
+  await input({ message: "Presioná Enter para volver..." });
 }
