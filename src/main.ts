@@ -178,7 +178,7 @@ async function main() {
       // ── PUBLICAR ISSUES ────────────────────────────────────────────────────
 
       if (modoClonado === "publicar_issues") {
-        await publishIssuesFlow(matcheados);
+        await publishIssuesFlow(matcheados, repoMap);
 
         await input({
           message: "Presioná Enter para volver al menú...",

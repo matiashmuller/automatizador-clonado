@@ -11,6 +11,7 @@ export const config = {
   PARCIAL_PREFIX: process.env.PARCIAL_PREFIX ?? "parcial",
   GITHUB_ORG: process.env.GITHUB_ORG ?? "",
   GITHUB_TOKEN: process.env.GITHUB_TOKEN ?? "",
+  ISSUE_TITLE: process.env.ISSUE_TITLE ?? "",
 
   // Directorios
   DATA_DIR,

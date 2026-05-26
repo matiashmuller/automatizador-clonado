@@ -99,43 +99,48 @@ export function cloneRepo(cloneUrl: string, targetDir: string): boolean {
   }
 }
 
-export async function createIssue({
-  owner,
-  repo,
-  title,
-  body,
-}: {
-  owner: string;
-  repo: string;
-  title: string;
-  body: string;
-}) {
-  const headers: Record<string, string> = {
-    Accept: "application/vnd.github+json",
-    "X-GitHub-Api-Version": "2022-11-28",
-    "Content-Type": "application/json",
-  };
-
-  if (config.GITHUB_TOKEN) {
-    headers["Authorization"] = `Bearer ${config.GITHUB_TOKEN}`;
+export async function createIssue(
+  repoData: RepoData,
+  title: string,
+  body: string,
+): Promise<boolean> {
+  if (!config.GITHUB_TOKEN) {
+    console.log("❌ Falta GITHUB_TOKEN");
+    return false;
   }
 
-  const res = await fetch(
-    `https://api.github.com/repos/${owner}/${repo}/issues`,
-    {
-      method: "POST",
-      headers,
+  try {
+    const res = await fetch(
+      `https://api.github.com/repos/${repoData.owner}/${repoData.repo}/issues`,
+      {
+        method: "POST",
 
-      body: JSON.stringify({
-        title,
-        body,
-      }),
-    },
-  );
+        headers: {
+          Authorization: `Bearer ${config.GITHUB_TOKEN}`,
+          Accept: "application/vnd.github+json",
+          "Content-Type": "application/json",
+          "X-GitHub-Api-Version": "2022-11-28",
+        },
 
-  if (!res.ok) {
-    throw new Error(`GitHub API error (${res.status}): ${await res.text()}`);
+        body: JSON.stringify({
+          title,
+          body,
+        }),
+      },
+    );
+
+    if (!res.ok) {
+      console.log(
+        `❌ GitHub API ${res.status}: ${await res.text()}`,
+      );
+
+      return false;
+    }
+
+    return true;
+  } catch (e: any) {
+    console.log(`❌ Error creando issue: ${e.message}`);
+
+    return false;
   }
-
-  return await res.json();
 }
