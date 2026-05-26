@@ -1,16 +1,4 @@
-# Corrección
-
-Alumno: {{nombre}}
-
-DNI: {{dni}}
-
-GitHub: {{github}}
-
-Repo: {{repo}}
-
-Comisión: {{comision}}
-
----
+# Devolución
 
 ## Observaciones generales
 
@@ -40,17 +28,10 @@ Comisión: {{comision}}
 
 ---
 
-## Detalle 
+## Comentarios 
 
 -
 
 ---
 
 ## Nota: 
-
----
-
-## Estado
-
-- [ ] Corregido
-- [ ] Publicado
