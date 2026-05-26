@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { config } from '../config';
-import { Alumno } from '../types';
+import { Alumno, RepoData } from '../types';
 
 const CACHE_FILE = path.join(process.cwd(), '.cache_datos.json');
 
@@ -19,7 +19,7 @@ function getArchivosMtime() {
   }
 }
 
-export function loadCache(): { matcheados: Alumno[], repoMap: Map<string, string> } | null {
+export function loadCache(): { matcheados: Alumno[], repoMap: Map<string, RepoData> } | null {
   if (!fs.existsSync(CACHE_FILE)) return null;
 
   try {
@@ -38,14 +38,14 @@ export function loadCache(): { matcheados: Alumno[], repoMap: Map<string, string
     }
 
     // Reconstruimos el Map de repositorios
-    const repoMap = new Map<string, string>(Object.entries(data.repoMap));
+    const repoMap = new Map<string, RepoData>(Object.entries(data.repoMap));
     return { matcheados: data.matcheados as Alumno[], repoMap };
   } catch (e) {
     return null; // Si hay error parseando, forzamos reescaneo
   }
 }
 
-export function saveCache(matcheados: Alumno[], repoMap: Map<string, string>) {
+export function saveCache(matcheados: Alumno[], repoMap: Map<string, RepoData>) {
   const currentMtimes = getArchivosMtime();
   if (!currentMtimes) return;
 

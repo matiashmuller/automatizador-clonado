@@ -22,3 +22,9 @@ export type RegistroCorreccion = {
   fechaClonado?: string;
   fechaArchivado?: string;
 };
+
+export type RepoData = {
+  cloneUrl: string;
+  owner: string;
+  repo: string;
+};

@@ -15,13 +15,9 @@ import { fetchReposForUsers } from "./services/gitService";
 
 import { scaffoldFolder, getPaths } from "./services/fileManager";
 
-import { Alumno, Presente, Usuario } from "./types";
+import { Alumno, Presente, RepoData, Usuario } from "./types";
 
-import {
-  checkbox,
-  confirm,
-  input,
-} from "@inquirer/prompts";
+import { checkbox, confirm, input } from "@inquirer/prompts";
 
 import search from "@inquirer/search";
 
@@ -55,7 +51,7 @@ async function main() {
 
   let matcheados: Alumno[] = [];
 
-  let repoMap: Map<string, string> = new Map();
+  let repoMap: Map<string, RepoData> = new Map();
 
   const cacheGuardado = loadCache();
 
@@ -133,8 +129,7 @@ async function main() {
         {
           name: "📨 Publicar issues",
           value: "publicar_issues",
-          description:
-            "Publica devoluciones archivadas como issues en GitHub.",
+          description: "Publica devoluciones archivadas como issues en GitHub.",
         },
 
         {
@@ -277,9 +272,7 @@ async function main() {
               `\n 🚨 LIBRE: ${p.nombre} (DNI: ${p.dni}) está en condición LIBRE`,
             );
 
-            const resp = await prompt(
-              "    ¿Incluir de todas formas? (s/N): ",
-            );
+            const resp = await prompt("    ¿Incluir de todas formas? (s/N): ");
 
             if (resp.toLowerCase() !== "s") {
               continue;
@@ -412,8 +405,7 @@ async function main() {
             "Marcá con Espacio los corregidos y desmarcá para revertir (Enter confirma):",
 
           choices: activos.map((alumno) => {
-            const yaCorregido =
-              getAlumnoState(alumno.dni) === "CORREGIDO";
+            const yaCorregido = getAlumnoState(alumno.dni) === "CORREGIDO";
 
             return {
               name: `${yaCorregido ? "✅ (Corregido)" : "📂 (En proceso)"} ${alumno.nombre} (${alumno.dni})`,
@@ -426,8 +418,7 @@ async function main() {
         // ── Desmarcar = volver a EN_CORRECCION ──────────────────────────────
 
         const desmarcados = activos.filter(
-          (a) =>
-            !alumnosSeleccionados.find((sel) => sel.dni === a.dni),
+          (a) => !alumnosSeleccionados.find((sel) => sel.dni === a.dni),
         );
 
         let revertidos = 0;
@@ -479,24 +470,16 @@ async function main() {
           for (const alumno of alumnosSeleccionados) {
             const { folderPath, comisionFolder } = getPaths(alumno);
 
-            const feedbackOrigen = path.join(
-              folderPath,
-              "feedback.md",
-            );
+            const feedbackOrigen = path.join(folderPath, "feedback.md");
 
             // ── Validar nota ────────────────────────────────────────────────
 
             let tieneNotaValida = false;
 
             if (fs.existsSync(feedbackOrigen)) {
-              const contenido = fs.readFileSync(
-                feedbackOrigen,
-                "utf-8",
-              );
+              const contenido = fs.readFileSync(feedbackOrigen, "utf-8");
 
-              const notaMatch = contenido.match(
-                /##\s*Nota:\s*([^\s]+)/i,
-              );
+              const notaMatch = contenido.match(/##\s*Nota:\s*([^\s]+)/i);
 
               if (
                 notaMatch &&
@@ -508,9 +491,7 @@ async function main() {
             }
 
             if (!tieneNotaValida) {
-              archivadosFallidos.push(
-                `${alumno.nombre} (DNI: ${alumno.dni})`,
-              );
+              archivadosFallidos.push(`${alumno.nombre} (DNI: ${alumno.dni})`);
 
               updateAlumnoState(alumno, "EN_CORRECCION");
 
@@ -566,13 +547,9 @@ async function main() {
               `\n❌ OMITIDOS POR FALTA DE NOTA: ${archivadosFallidos.length}`,
             );
 
-            console.log(
-              '   (Carpetas protegidas, devueltas a "En proceso")',
-            );
+            console.log('   (Carpetas protegidas, devueltas a "En proceso")');
 
-            archivadosFallidos.forEach((n) =>
-              console.log(`   - ${n}`),
-            );
+            archivadosFallidos.forEach((n) => console.log(`   - ${n}`));
           }
 
           console.log(`${"=".repeat(60)}\n`);
@@ -615,8 +592,7 @@ async function main() {
         }
 
         const seleccionados = await checkbox({
-          message:
-            "Seleccioná las entregas archivadas que querés reabrir:",
+          message: "Seleccioná las entregas archivadas que querés reabrir:",
 
           choices: archivados.map((alumno) => ({
             name: `📦 ${alumno.nombre} (${alumno.dni}) [@${alumno.usuario["Usuario Github Registrado"]}]`,
@@ -707,13 +683,16 @@ async function main() {
 
         console.log(`\nProcesando a ${alumnoElegido.nombre}...`);
 
-        const cloneUrl = repoMap.get(
-          alumnoElegido.usuario[
-            "Usuario Github Registrado"
-          ].toLowerCase(),
+        const repoData = repoMap.get(
+          alumnoElegido.usuario["Usuario Github Registrado"].toLowerCase(),
         );
 
-        scaffoldFolder(alumnoElegido, cloneUrl);
+        if (!repoData) {
+          console.log("❌ Repo no encontrado.");
+          continue;
+        }
+
+        scaffoldFolder(alumnoElegido, repoData.cloneUrl);
 
         updateAlumnoState(alumnoElegido, "EN_CORRECCION");
 
@@ -728,10 +707,7 @@ async function main() {
 
       // ── AUTO / PASO A PASO ────────────────────────────────────────────────
 
-      if (
-        modoClonado === "auto" ||
-        modoClonado === "paso_a_paso"
-      ) {
+      if (modoClonado === "auto" || modoClonado === "paso_a_paso") {
         const pasoAPaso = modoClonado === "paso_a_paso";
 
         let cancelado = false;
@@ -741,16 +717,16 @@ async function main() {
         for (let i = 0; i < matcheados.length; i++) {
           const alumno = matcheados[i];
 
-          const porcentaje = Math.round(
-            ((i + 1) / matcheados.length) * 100,
+          const porcentaje = Math.round(((i + 1) / matcheados.length) * 100);
+
+          const repoData = repoMap.get(
+            alumno.usuario["Usuario Github Registrado"].toLowerCase(),
           );
 
-          const cloneUrl = repoMap.get(
-            alumno.usuario[
-              "Usuario Github Registrado"
-            ].toLowerCase(),
-          );
-
+          if (!repoData) {
+            console.log("❌ Repo no encontrado.");
+            continue;
+          }
           const estado = getAlumnoState(alumno.dni);
 
           if (!config.DRY_RUN && estado !== "PENDIENTE") {
@@ -779,7 +755,7 @@ async function main() {
             );
           }
 
-          scaffoldFolder(alumno, cloneUrl);
+          scaffoldFolder(alumno, repoData.cloneUrl);
 
           updateAlumnoState(alumno, "EN_CORRECCION");
         }
