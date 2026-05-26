@@ -115,13 +115,13 @@ export async function publishIssuesFlow(
 
     const feedbackContent = `@${githubUser}\n\n${feedbackMd.trim()}`;
 
-    const ok = await createIssue(
+    const issue = await createIssue(
       repoData,
       `${config.ISSUE_TITLE}`,
       feedbackContent,
     );
 
-    if (!ok) {
+    if (!issue) {
       console.log(`❌ Error publicando issue para ${alumno.nombre}`);
 
       fallidos++;
@@ -131,7 +131,7 @@ export async function publishIssuesFlow(
 
     updateAlumnoState(alumno, "PUBLICADO");
 
-    console.log(`✅ Issue publicado para ${alumno.nombre}`);
+    console.log(`✅ Issue publicado para ${alumno.nombre}: ${issue.html_url}`);
 
     publicados++;
   }

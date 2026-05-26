@@ -103,10 +103,10 @@ export async function createIssue(
   repoData: RepoData,
   title: string,
   body: string,
-): Promise<boolean> {
+): Promise<any | null> {
   if (!config.GITHUB_TOKEN) {
     console.log("❌ Falta GITHUB_TOKEN");
-    return false;
+    return null;
   }
 
   try {
@@ -114,14 +114,12 @@ export async function createIssue(
       `https://api.github.com/repos/${repoData.owner}/${repoData.repo}/issues`,
       {
         method: "POST",
-
         headers: {
           Authorization: `Bearer ${config.GITHUB_TOKEN}`,
           Accept: "application/vnd.github+json",
           "Content-Type": "application/json",
           "X-GitHub-Api-Version": "2022-11-28",
         },
-
         body: JSON.stringify({
           title,
           body,
@@ -130,17 +128,15 @@ export async function createIssue(
     );
 
     if (!res.ok) {
-      console.log(
-        `❌ GitHub API ${res.status}: ${await res.text()}`,
-      );
-
-      return false;
+      console.log(`❌ GitHub API ${res.status}: ${await res.text()}`);
+      return null;
     }
 
-    return true;
+    const data = await res.json();
+    return data; // Retornamos el objeto completo del issue creado
+    
   } catch (e: any) {
     console.log(`❌ Error creando issue: ${e.message}`);
-
-    return false;
+    return null;
   }
 }
