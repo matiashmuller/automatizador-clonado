@@ -1,121 +1,126 @@
-🤖 Automatizador de entregas GitHub
+# Automatizador de corrección de entregas
 
-CLI en TypeScript para automatizar la organización, clonación y gestión de entregas de alumnos desde GitHub a partir de CSVs de la cátedra.
+CLI en TypeScript para preparar y gestionar la corrección de trabajos prácticos entregados vía GitHub. Cruza listas de alumnos con sus repos, los clona con estructura ordenada, y lleva el estado de cada entrega de punta a punta.
 
-Su objetivo es reducir el trabajo manual en correcciones masivas, mantener un estado local de cada entrega y facilitar la publicación de devoluciones como issues.
+---
 
-✨ Funcionalidades
-📄 Lectura de CSVs (presentes, usuarios activos, faltas)
-🎯 Filtrado por comisión y asistencia
-🔗 Cruce automático DNI → usuario GitHub
-🔎 Búsqueda de repositorios en GitHub (API)
-📦 Clonado automático de entregas
-🗂️ Estructura ordenada por comisión y alumno
-📝 Generación de feedback.md por entrega
-🧠 Sistema de estados de corrección
-🔄 Sincronización con sistema de archivos
-📨 Publicación de issues con devoluciones en GitHub
-📁 Estructura generada
+## Cómo funciona
 
-entregas/
-└── comision/
-└── DNI-Nombre-Apellido/
-├── feedback.md
-└── parcial-usuarioGithub/
+1. Lee tres CSVs: presentes, usuarios GitHub y estado de faltas
+2. Cruza los datos, filtra por comisión y detecta alumnos libres
+3. Busca los repos en GitHub (por organización o por cuenta personal)
+4. Clona cada repo y genera un `feedback.md` listo para corregir
+5. Persiste el estado de cada entrega en `.estado_correcciones.json`
 
-⚙️ Instalación
+---
 
+## Instalación
+
+```bash
+git clone <repo>
+cd <repo>
 npm install
+```
 
-Crear archivo .env en la raíz:
+Crear `.env` en la raíz:
 
-GITHUB_TOKEN=tu_token
-GITHUB_ORG=tu_organizacion (opcional)
-PARCIAL_PREFIX=parcial
-ISSUE_TITLE=título de los issues (opcional)
+```env
+GITHUB_TOKEN=ghp_...                # Token con acceso a repos (requerido)
+GITHUB_ORG=nombre-organizacion      # Si los repos están en una org (opcional)
+PARCIAL_PREFIX=parcial              # Prefijo esperado de los repos
+ISSUE_TITLE=Devolución TP           # Título del issue al publicar devoluciones
+FILE_FALTAS=estado_faltas.csv       # Nombre de archivo que indica libres
+FILE_PRESENTES=presentes.csv        # Nombre de archivo que indica presentes el día del examen
+FILE_USUARIOS=usuarios_activos.csv  # Nombre de archivo que indica usuarios de github y comisión
+```
 
-📊 CSV requeridos
+---
 
-Colocar en la carpeta /data:
+## Archivos de datos requeridos
 
-presentes.csv
+Deben estar en la carpeta `data/`. Los nombres se pueden cambiar desde `src/config.ts` o con variables de entorno (`FILE_PRESENTES`, `FILE_USUARIOS`, `FILE_FALTAS`).
 
-Alumnos presentes el día del examen.
+| Archivo | Columnas mínimas |
+|---|---|
+| `presentes.csv` | `dni`, `nombre`, `presente` |
+| `usuarios_activos.csv` | `DNI`, `Usuario Github Registrado`, `Comision` _(fila 1 se saltea)_ |
+| `estado_faltas.csv` | `DNI`, `Estado` |
 
-dni,nombre,presente
-41222333,RODRIGUEZ TOMAS,true
+---
 
-usuarios_activos.csv
+## Uso
 
-Relación DNI ↔ GitHub.
-
-DNI,APELLIDO Y NOMBRE,Usuario Github Registrado,Actividad,Comision,GRUPO
-40123456,PEREZ LUCAS,lucasp-dev,Active,Comisión - 1,Grupo Alpha
-
-estado_faltas.csv
-
-Control de inasistencias.
-
-DNI,Apellido y Nombre,Inasistencias,Estado
-39888777,GOMEZ VALENTINA,9,LIBRE
-
-▶️ Ejecución
-
+```bash
 npx tsx src/main.ts
+```
 
-🔧 Flags
+Con flags opcionales:
 
---dry-run → no escribe ni clona nada
---all-comisiones → procesa todo automáticamente
+```bash
+npx tsx src/main.ts --dry-run          # Simula sin escribir nada en disco
+npx tsx src/main.ts --all-comisiones   # Procesa todas las comisiones sin preguntar
+```
 
-Ejemplo:
+Al iniciar, si los CSVs no cambiaron desde la última vez, los datos se cargan desde caché automáticamente.
 
-npx tsx src/main.ts --dry-run --all-comisiones
+---
 
-🧭 Flujo de uso
-Carga de CSVs
-Selección de comisiones
-Matcheo de alumnos con GitHub
-Clonado de repositorios
-Corrección manual
-Archivado de entregas
-Publicación de issues con feedback
-📌 Modos
-Automático → clona todo lo pendiente
-Paso a paso → confirma cada alumno
-Individual → búsqueda manual
-Sincronizar → actualiza estado desde disco
-Gestionar corregidos → marcar/desmarcar
-Reabrir archivados → restaurar entregas
-Publicar issues → subir devoluciones
-📦 Estados
-PENDIENTE
-EN_CORRECCION
-CORREGIDO
-ARCHIVADO
-PUBLICADO
-🔗 Repositorios
+## Menú principal
 
-<PARCIAL_PREFIX>-<githubUser>
+| Opción | Qué hace |
+|---|---|
+| 🤖 **Automático** | Clona todos los repos pendientes sin interrupciones |
+| 👆 **Paso a paso** | Pide confirmación antes de cada alumno |
+| 🔎 **Buscar repo individual** | Buscador dinámico por nombre, DNI o usuario GitHub |
+| 🔄 **Sincronizar** | Escanea las carpetas locales y actualiza los estados (útil si pegaste repos a mano o borraste carpetas) |
+| ✅ **Marcar / Desmarcar corregidos** | Cambia estados y archiva entregas (copia el `feedback.md` al historial y borra la carpeta) |
+| 📦 **Reabrir archivados** | Devuelve entregas archivadas a Pendiente y elimina su `.md` del historial |
+| 📨 **Publicar issues** | Publica la devolución como issue en el repo del alumno |
+| 🗂️ **Reescanear datos** | Vuelve a leer los CSVs (útil para cambiar de comisión) |
 
-Ejemplo:
+Navegación: **↑↓** para moverse · **número** para entrar directo · **⌫** para volver.
 
-parcial-lucasp-dev
+---
 
-📝 Feedback
+## Estados de una entrega
 
-templates/feedback.md
+```
+PENDIENTE → EN_CORRECCION → CORREGIDO → ARCHIVADO → PUBLICADO
+```
 
-🔐 GitHub Token
+| Estado | Significa |
+|---|---|
+| `PENDIENTE` | Repo no clonado aún |
+| `EN_CORRECCION` | Carpeta en disco, `feedback.md` sin nota |
+| `CORREGIDO` | `feedback.md` tiene `## Nota:` completada |
+| `ARCHIVADO` | Carpeta eliminada, `.md` guardado en `historial_correcciones/` |
+| `PUBLICADO` | Issue publicado en el repo del alumno |
 
-Requerido para:
+La sincronización detecta cambios automáticamente: si una carpeta reaparece en disco (re-clonado), vuelve a `EN_CORRECCION` y limpia su entrada del historial.
 
-buscar repositorios
-clonar repos privados
-crear issues
+---
 
-Permisos: repo
+## Estructura de carpetas generada
 
-🎯 Objetivo
+```
+entregas/
+└── comision3/
+    └── 12345678_APELLIDO-NOMBRE/
+        ├── feedback.md
+        └── parcial-usuariogithub/   ← repo clonado
 
-Optimizar el proceso de corrección de entregas masivas, reduciendo errores manuales y centralizando el flujo de trabajo.
+historial_correcciones/
+└── comision3/
+    └── 12345678_APELLIDO-NOMBRE_feedback.md
+```
+
+---
+
+## Archivos internos (no commitear)
+
+| Archivo | Para qué |
+|---|---|
+| `.estado_correcciones.json` | Estado persistido de cada entrega |
+| `.cache_datos.json` | Caché de CSVs + repos (se invalida si cambia algún CSV) |
+
+Ambos están en `.gitignore`.
