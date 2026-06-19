@@ -1,8 +1,10 @@
 /entregas
 /data
 /historial_correcciones
+/log
 .cache_datos.json
 .estado_correcciones.json
+*.log
 
 # See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
 

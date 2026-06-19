@@ -14,10 +14,6 @@
 
 - 
 
-### Clases y herencia
-
-- 
-
 ### Tests
 
 - 
@@ -34,11 +30,7 @@
 
 ## Comentarios 
 
-Hola [nombre].
-
-Tu parcial está [devolución]
-
-- 
+-
 
 ---
 
