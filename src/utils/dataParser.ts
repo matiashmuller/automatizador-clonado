@@ -19,7 +19,7 @@ export function loadPresentes() {
 
 export function loadUsuarios() {
   // Usamos la ruta ya calculada en el config
-  return loadCSV(config.PATHS.USUARIOS, 1).map(
+  return loadCSV(config.PATHS.USUARIOS, 0).map(
     (r: any) => ({ ...r, Comision: r["Comision"]?.trim() }),
   );
 }

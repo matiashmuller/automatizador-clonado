@@ -1,45 +1,28 @@
-# Devolución
+# Parcial 20/10/26 - Devolución y nota
 
-## Observaciones generales
+Hola [].
 
-### Objeto y mensaje
-
-- 
-
-### Polimorfismo
-
-- 
-
-### Colecciones y bloques
-
-- 
-
-### Clases y herencia
-
-- 
-
-### Tests
-
-- 
-
-### Prolijidad y legibilidad
-
-- 
-
-### Estructura
-
-- 
-
----
-
-## Comentarios 
-
-Hola [nombre].
-
-Tu parcial está [devolución]
-
-- 
+Tu examen... 
+Te dejo abajo tu solución con algunos comentarios.
+Tu nota es . 
+Saludos.
 
 ---
 
 ## Nota: 
+
+<details>
+<summary><b>proyectosUniversitarios.wlk</b></summary>
+
+```
+
+```
+</details>
+
+<details>
+<summary><b>testProyectosUniversitarios.wtest</b></summary>
+
+```
+
+```
+</details>

@@ -57,6 +57,20 @@ export async function fetchReposForUsers(
     }
     console.log(`  🔎 Repos en org con ese prefijo: ${totalCount}`);
     console.log(`  ✅ Encontrados: ${found} / ${usernames.length}`);
+
+    // --- NUEVO: Detectar y listar los no encontrados ---
+    if (found < usernames.length) {
+      // Necesitamos cruzar los usernames con los que sí están en el 'result'
+      // Como 'result' tiene las keys en minúsculas, filtramos los que faltan:
+      console.log(`  ⚠️  Alumnos sin repositorio encontrado en la org:`);
+      // Nota: Si querés mostrar el nombre completo, podés pasar el array de objetos Alumno en vez de solo usernames,
+      // pero con los usuarios de GitHub ya te avisa exacto cuál falló.
+      for (const u of usernames) {
+        if (!result.has(u.toLowerCase())) {
+          console.log(`     - Usuario GitHub: @${u}`);
+        }
+      }
+    }
   } else {
     console.log(`\n🔍 Buscando repos por usuario (sin org)...`);
     await Promise.all(
@@ -134,7 +148,6 @@ export async function createIssue(
 
     const data = await res.json();
     return data; // Retornamos el objeto completo del issue creado
-    
   } catch (e: any) {
     console.log(`❌ Error creando issue: ${e.message}`);
     return null;
